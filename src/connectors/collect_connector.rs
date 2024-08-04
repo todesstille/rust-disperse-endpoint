@@ -1,5 +1,5 @@
 use std::sync::Arc;
-
+use dotenv::dotenv;
 use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 use ethers::{
@@ -79,7 +79,7 @@ pub async fn make_collect(collect_req: web::Json<CollectRequest>) -> impl Respon
                     let tx_hash = hex::encode(tx.tx_hash().as_bytes());
                     tx.await.expect("tx dropped from mempool");
                     return tx_hash;
-            };
+                };
     
                 return "".to_string();
             } else {

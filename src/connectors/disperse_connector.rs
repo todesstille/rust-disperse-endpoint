@@ -1,6 +1,11 @@
 use actix_web::{web, HttpResponse, Responder};
 use eyre::Context;
+use dotenv::dotenv;
+use std::env;
 use serde::{Deserialize, Serialize};
+use ethers::{
+    core::types::TransactionRequest, middleware::SignerMiddleware, providers::{Http, Middleware, Provider}, signers::{LocalWallet, Signer}, types::{Address, U256}
+};
 
 #[derive(Deserialize, Clone)]
 pub struct DisperserRequest {
@@ -17,11 +22,6 @@ struct DisperseResponse {
 pub async fn make_disperse(disperser_req: web::Json<Vec<DisperserRequest>>) -> impl Responder {
     let disperser_data = disperser_req.into_inner();
 
-    // let response: Vec<DisperseResponse> = disperser_data.clone()
-    //     .into_iter()
-    //     .map(|req| DisperseResponse {token: req.token})
-    //     .collect();
-
     let mut calldata: Vec<u8> = vec![];
     calldata.push(disperser_data.len() as u8);
     for data in disperser_data {
@@ -35,7 +35,56 @@ pub async fn make_disperse(disperser_req: web::Json<Vec<DisperserRequest>>) -> i
         }
     }
 
-    return HttpResponse::Ok().json(hex::encode(calldata));
+    let contract_address;
+    match "0x88b81e18eC50eB04A83B82158DcC6dD1813ab6d0".parse::<Address>() {
+        Ok(address_inn) => {contract_address = address_inn}
+        Err(err) => {
+            return HttpResponse::BadRequest().body(format!("Failed to parse address: {}", err));
+        }
+    }
+
+    let provider;
+    match Provider::<Http>::try_from("https://sepolia.infura.io/v3/47bcfcab54cd4104a97fb13f84ae431e") {
+        Ok(provider_inner) => {provider = provider_inner}
+        Err(err) => {
+            return HttpResponse::BadRequest().body(format!("Failed to get provider: {}", err));
+        }
+    };
+
+    let private_key;
+    dotenv().ok();
+    match env::var("PRIVATE_KEY") {
+        Ok(value) => private_key = value,
+        Err(err) => {
+            return HttpResponse::BadRequest().body(format!("Failed to read disperser owner: {}", err));
+        }
+    }
+
+    let wallet;
+    match LocalWallet::try_from(private_key) {
+        Ok(wallet_inner) => {wallet = wallet_inner}
+        Err(err) => {
+            return HttpResponse::BadRequest().body(format!("Failed to create wallet: {}", err));
+        }
+    }
+
+    let client = SignerMiddleware::new(provider, wallet.with_chain_id(11155111u64));
+
+    let tx;
+    match client.send_transaction(
+        TransactionRequest::new()
+            .to(contract_address)
+            .data(calldata),
+        None).await {
+            Ok(tx_inner) => {tx = tx_inner}
+            Err(err) => {
+                return HttpResponse::BadRequest().body(format!("Failed to send tx: {}", err));
+            }
+        }
+
+    let tx_hash = hex::encode(tx.tx_hash().as_bytes());
+    tx.await.expect("tx dropped from mempool");
+    return HttpResponse::Ok().json(tx_hash);
 }
 
 impl DisperserRequest {
