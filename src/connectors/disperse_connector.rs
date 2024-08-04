@@ -2,7 +2,7 @@ use actix_web::{web, HttpResponse, Responder};
 use eyre::Context;
 use dotenv::dotenv;
 use std::env;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use ethers::{
     core::types::TransactionRequest, middleware::SignerMiddleware, providers::{Http, Middleware, Provider}, signers::{LocalWallet, Signer}, types::{Address, U256}
 };
@@ -12,11 +12,6 @@ pub struct DisperserRequest {
     token: String,
     addresses: Vec<String>,
     amounts: Vec<String>
-}
-
-#[derive(Serialize)]
-struct DisperseResponse {
-    token: String,
 }
 
 pub async fn make_disperse(disperser_req: web::Json<Vec<DisperserRequest>>) -> impl Responder {
